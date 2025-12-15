@@ -1,0 +1,28 @@
+[project]
+name = "listen"
+version = "0.1.0"
+description = "Audio transcription tool with AI-powered text improvement"
+requires-python = ">=3.11"
+dependencies = [
+    "customtkinter",
+    "faster-whisper",
+    "pyaudio",
+    "numpy",
+    "httpx",
+    "google-generativeai",
+    "any-llm-sdk[google,ollama,openai]",
+]
+
+[project.scripts]
+listen = "listen_tools.listen_app:main"
+improve = "listen_tools.improve:main"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests that connect to real services (deselect with '-m \"not integration\"')",
+    "slow: marks tests as slow running (deselect with '-m \"not slow\"')"
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

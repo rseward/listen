@@ -1,0 +1,7 @@
+customtkinter
+faster-whisper
+pyaudio
+numpy
+httpx
+pytest
+any-llm-sdk[google,ollama,openai]
