@@ -4,7 +4,9 @@
       "Bash(make install)",
       "Bash(make test)",
       "Bash(make test-integration)",
-      "Bash(make test-unit)"
+      "Bash(make test-unit)",
+      "Bash(git remote add origin git@github.com:rseward/listen.git)",
+      "Bash(uv pip install -e .)"
     ],
     "deny": [],
     "ask": []

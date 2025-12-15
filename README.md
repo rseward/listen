@@ -10,6 +10,18 @@ A desktop application for recording audio and transcribing it using faster-whisp
 - **Smart Auto-Close**: Window closes after 15 seconds of silence or when Stop is pressed
 - **Stdout Output**: Final transcription printed to standard output for easy piping
 
+## Example Usage:
+
+```bash
+# Record audio and transcribe with AI improvement
+# Run this command pipeline after sourcing the python virtual environment
+
+listen | improve
+
+# Just transcribe (no AI improvement)
+listen
+```
+
 ## Installation
 
 ### Option 1: Using uv sync (Recommended)
@@ -33,9 +45,10 @@ make install
 uv pip install -e .
 ```
 
-Both methods will install two commands:
+Both methods will install three commands:
 - `listen` - The GUI transcription application
 - `improve` - Text improvement CLI tool
+- `list-models` - List available AI models from configured providers
 
 ## Usage
 
@@ -72,6 +85,27 @@ uv run improve "um this is like a test you know"
 
 # Pipe from listen
 uv run listen | uv run improve
+```
+
+### List Models (Discovery)
+
+List available AI models from configured providers:
+
+```bash
+# List all available models
+uv run list-models
+
+# List only Gemini models
+uv run list-models --provider gemini
+
+# List only Ollama models
+uv run list-models --provider ollama
+
+# Show only any-llm-sdk format strings
+uv run list-models --any-llm-only
+
+# JSON output
+uv run list-models --format json
 ```
 
 ### Configuration

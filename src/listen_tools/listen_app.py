@@ -14,6 +14,7 @@ import time
 import threading
 from faster_whisper import WhisperModel
 import sys
+import click
 
 
 class ListenApp(ctk.CTk):
@@ -281,9 +282,102 @@ class ListenApp(ctk.CTk):
         self.destroy()
 
 
-def main():
-    """Main entry point for the listen command."""
+@click.command()
+@click.option('--model-size', '-m',
+              default='base',
+              type=click.Choice(['tiny', 'base', 'small', 'medium', 'large-v3'], case_sensitive=False),
+              help='Whisper model size (default: base)')
+@click.option('--silence-threshold', '-s',
+              default=15,
+              type=int,
+              help='Seconds of silence before auto-close (default: 15)')
+@click.option('--cuda/--no-cuda',
+              default=False,
+              help='Use CUDA GPU acceleration (requires NVIDIA GPU)')
+@click.version_option(version='0.1.0', prog_name='listen')
+def main(model_size, silence_threshold, cuda):
+    """
+    Audio transcription tool with real-time GUI display.
+
+    Records audio from your microphone and transcribes it using faster-whisper.
+    The transcription is displayed in real-time in a GUI window and printed to
+    stdout when recording stops.
+
+    Features:
+
+        \b
+        - Real-time transcription display
+        - Automatic silence detection
+        - Clean GUI interface
+        - Stdout output for easy piping
+
+    Usage Examples:
+
+        \b
+        # Basic usage
+        listen
+
+        \b
+        # Pipe to improve for AI enhancement
+        listen | improve
+
+        \b
+        # Use larger model for better accuracy
+        listen --model-size medium
+
+        \b
+        # Adjust silence threshold
+        listen --silence-threshold 10
+
+        \b
+        # Use GPU acceleration
+        listen --cuda
+
+    How It Works:
+
+        \b
+        1. Opens a GUI window with a Record button
+        2. Click Record to start capturing audio
+        3. Speak into your microphone
+        4. See transcription appear in real-time
+        5. Click Stop or wait for silence (default: 15 seconds)
+        6. Transcription is printed to stdout
+
+    Tips:
+
+        \b
+        - Use a quiet environment for best results
+        - Speak clearly and at a moderate pace
+        - The 'base' model provides good accuracy/speed balance
+        - Use 'medium' or 'large-v3' for better accuracy (slower)
+        - Use 'tiny' for fastest processing (less accurate)
+    """
+    # Create and configure app with command-line options
     app = ListenApp()
+
+    # Apply command-line options
+    app.silence_threshold = silence_threshold
+
+    # Update model initialization to use provided options
+    # This requires modifying the ListenApp to accept these parameters
+    # For now, we'll update the app after initialization
+    original_init = app.initialize_model
+
+    def custom_init():
+        """Initialize with custom model settings"""
+        try:
+            device = "cuda" if cuda else "cpu"
+            compute_type = "float16" if cuda else "int8"
+
+            app.model = WhisperModel(model_size, device=device, compute_type=compute_type)
+            app.audio_interface = pyaudio.PyAudio()
+            app.after(0, app.model_loaded)
+        except Exception as e:
+            app.after(0, lambda: app.show_error(f"Model initialization failed: {e}"))
+
+    # Replace the initialization method
+    threading.Thread(target=custom_init, daemon=True).start()
+
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
 
     try:

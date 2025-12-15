@@ -30,10 +30,10 @@ class TestGeminiAvailable:
                 assert gemini_available() is False
 
     def test_gemini_available_exception_on_configure(self):
-        """Test gemini_available returns False when configure raises exception"""
+        """Test gemini_available returns False when Client initialization raises exception"""
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-api-key"}):
-            # Patch the configure function to raise an exception
-            with patch('google.generativeai.configure', side_effect=Exception("API error")):
+            # Patch the Client class to raise an exception
+            with patch('google.genai.Client', side_effect=Exception("API error")):
                 assert gemini_available() is False
 
 
@@ -87,7 +87,7 @@ class TestTextImprover:
             with patch('listen_tools.text_improver.ollama_available', return_value=False):
                 improver = TextImprover("Test prompt")
 
-                assert improver.model == "google:models/gemini-2.0-flash-exp"
+                assert improver.model == "gemini:gemini-2.0-flash-exp"
                 assert improver.prompt == "Test prompt"
 
     def test_init_with_ollama(self):
@@ -134,7 +134,7 @@ class TestTextImprover:
 
                         assert result == "Improved text"
                         mock_completion.assert_called_once_with(
-                            model="google:models/gemini-2.0-flash-exp",
+                            model="gemini:gemini-2.0-flash-exp",
                             messages=[
                                 {"role": "system", "content": "Fix grammar"},
                                 {"role": "user", "content": "test text"}
@@ -159,7 +159,7 @@ class TestTextImprover:
 
                         assert result == "Better text"
                         mock_completion.assert_called_once_with(
-                            model="google:models/gemini-2.0-flash-exp",
+                            model="gemini:gemini-2.0-flash-exp",
                             messages=[
                                 {"role": "system", "content": "Improve this"},
                                 {"role": "user", "content": "original text"}

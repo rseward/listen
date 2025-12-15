@@ -8,14 +8,14 @@ import any_llm
 def gemini_available() -> bool:
     # Check if Gemini API is available
     try:
-        import google.generativeai as genai
+        from google import genai
 
         apikey = os.getenv("GEMINI_API_KEY", None)
         if apikey is None:
             return False
 
-        # Try to initialize the API to make sure it's fully functional
-        genai.configure(api_key=apikey)
+        # Try to initialize the client to make sure it's fully functional
+        client = genai.Client(api_key=apikey)
         return True
     except (ImportError, Exception):
         return False
@@ -42,7 +42,7 @@ class TextImprover(object):
         self.prompt = prompt
         
         if gemini_available():
-            self.model = "google:models/gemini-2.0-flash-exp"
+            self.model = "gemini:gemini-2.0-flash-exp"
         elif ollama_available():
             self.model = "ollama:gemma3:latest"
 

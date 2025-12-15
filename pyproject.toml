@@ -9,13 +9,15 @@ dependencies = [
     "pyaudio",
     "numpy",
     "httpx",
-    "google-generativeai",
-    "any-llm-sdk[google,ollama,openai]",
+    "google-genai",
+    "any-llm-sdk[gemini,ollama,openai]",
+    "click",
 ]
 
 [project.scripts]
 listen = "listen_tools.listen_app:main"
 improve = "listen_tools.improve:main"
+list-models = "listen_tools.list_models:main"
 
 [tool.pytest.ini_options]
 markers = [

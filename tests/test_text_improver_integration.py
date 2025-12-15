@@ -202,7 +202,7 @@ class TestTextImproverServiceSelection:
 
         # Should prefer Gemini
         assert improver.model is not None
-        assert "google" in improver.model or "gemini" in improver.model.lower()
+        assert "gemini" in improver.model.lower()
 
     def test_falls_back_to_ollama(self):
         """Test fallback to Ollama when Gemini is not available"""
