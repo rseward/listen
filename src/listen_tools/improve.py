@@ -114,6 +114,8 @@ def main(text, prompt, raw, stdin):
         sys.exit(1)
 
     # Improve the text
+    display_text = transcribed_text[:50] + ("..." if len(transcribed_text) > 50 else "")
+    click.echo(f"Improving text... {display_text}", err=True)
     improved_text = improve_text(transcribed_text, prompt)
 
     # Output the improved text
