@@ -5,3 +5,4 @@ numpy
 httpx
 pytest
 any-llm-sdk[google,ollama,openai]
+python-dotenv

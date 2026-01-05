@@ -9,6 +9,10 @@ to improve grammar, punctuation, and clarity while preserving the original meani
 import sys
 import click
 from .text_improver import TextImprover
+from .logger import setup_logger
+
+# Set up logger
+logger = setup_logger(__name__)
 
 
 DEFAULT_PROMPT = """
@@ -41,8 +45,15 @@ def improve_text(text: str, prompt: str = DEFAULT_PROMPT) -> str:
     Returns:
         The improved text
     """
-    improver = TextImprover(prompt)
-    return improver.improve(text)
+    try:
+        logger.debug(f"Improving text (length: {len(text)} chars)")
+        improver = TextImprover(prompt)
+        result = improver.improve(text)
+        logger.info("Text improvement completed successfully")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to improve text: {e}", exc_info=True)
+        raise
 
 
 @click.command()
@@ -97,26 +108,38 @@ def main(text, prompt, raw, stdin):
         GEMINI_API_KEY       - API key for Google Gemini
         OPENAI_BASE_URL      - Custom Ollama URL (default: http://localhost:11434/api)
     """
+    logger.debug("Starting improve command")
+    
     # Determine input source
     if stdin or (text is None and not sys.stdin.isatty()):
         # Read from stdin
+        logger.debug("Reading text from stdin")
         transcribed_text = sys.stdin.read().strip()
     elif text:
         # Use command-line argument
+        logger.debug("Using text from command-line argument")
         transcribed_text = text
     else:
         # No input provided
+        logger.error("No text provided")
         click.echo("Error: No text provided. Use --help for usage information.", err=True)
         sys.exit(1)
 
     if not transcribed_text:
+        logger.error("Empty text provided")
         click.echo("Error: Empty text provided.", err=True)
         sys.exit(1)
 
     # Improve the text
     display_text = transcribed_text[:50] + ("..." if len(transcribed_text) > 50 else "")
     click.echo(f"Improving text... {display_text}", err=True)
-    improved_text = improve_text(transcribed_text, prompt)
+    
+    try:
+        improved_text = improve_text(transcribed_text, prompt)
+    except Exception as e:
+        logger.error(f"Text improvement failed: {e}", exc_info=True)
+        click.echo(f"Error: Text improvement failed: {e}", err=True)
+        sys.exit(1)
 
     # Output the improved text
     if raw:

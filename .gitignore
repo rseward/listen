@@ -10,6 +10,13 @@ wheels/
 .venv
 myenv
 
+# Log files
+logs/
+*.log
+
+# Environment variables
+.env
+
 # Emacs backup files
 *~
 \#*\#

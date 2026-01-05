@@ -110,10 +110,34 @@ uv run list-models --format json
 
 ### Configuration
 
+Copy `.env.example` to `.env` and configure as needed:
+
+```bash
+cp .env.example .env
+```
+
+#### Logging
+
+Set the log level in your `.env` file:
+
+```bash
+# Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_LEVEL=INFO
+```
+
+Logs are written to separate files in the `logs/` directory:
+- `logs/listen_app.log` - GUI application logs
+- `logs/improve.log` - Text improvement CLI logs
+- `logs/text_improver.log` - AI backend logs
+
+See [logs/README.md](logs/README.md) for detailed logging documentation.
+
 #### Gemini API (Recommended)
 
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
+# Or add to .env file:
+# GEMINI_API_KEY=your-api-key-here
 ```
 
 Get an API key from: https://makersuite.google.com/app/apikey
@@ -132,6 +156,8 @@ ollama serve
 
 # Optional: Set custom URL
 export OPENAI_BASE_URL="http://localhost:11434/api"
+# Or add to .env file:
+# OPENAI_BASE_URL=http://localhost:11434/api
 ```
 
 The `improve` command will automatically use:
@@ -185,6 +211,20 @@ listen/
 - google-generativeai (optional, for Gemini)
 - any-llm-sdk (for AI model integration)
 
+## Troubleshooting
+
+If the GUI closes before you can click Record, or you encounter other issues, see the [Troubleshooting Guide](TROUBLESHOOTING.md) for detailed diagnostic steps.
+
+Quick checks:
+```bash
+# View error logs
+tail -50 logs/listen_app.log | grep ERROR
+
+# Enable debug logging
+export LOG_LEVEL=DEBUG
+listen
+```
+
 ## Technical Details
 
 - **Cross-platform**: Works on Linux, macOS, and Windows
@@ -192,4 +232,5 @@ listen/
 - **Fast startup**: Background model loading
 - **Real-time display**: Live transcription updates
 - **Clean output**: Transcription to stdout for easy integration
+- **Comprehensive logging**: Separate log files for each component with configurable levels
 

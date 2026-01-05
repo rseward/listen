@@ -12,6 +12,7 @@ dependencies = [
     "google-genai",
     "any-llm-sdk[gemini,ollama,openai]",
     "click",
+    "python-dotenv",
 ]
 
 [project.scripts]

@@ -15,53 +15,67 @@ import threading
 from faster_whisper import WhisperModel
 import sys
 import click
+from .logger import setup_logger
+
+# Set up logger
+logger = setup_logger(__name__)
 
 
 class ListenApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, model_size="base", cuda=False):
+        try:
+            logger.debug("Initializing ListenApp GUI")
+            super().__init__()
 
-        # Window configuration
-        self.title("Listen")
-        self.geometry("400x300")
-        self.resizable(False, False)
+            # Store configuration
+            self.model_size = model_size
+            self.cuda = cuda
 
-        # Center the window
-        self.update_idletasks()
-        width = self.winfo_width()
-        height = self.winfo_height()
-        x = (self.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.winfo_screenheight() // 2) - (height // 2)
-        self.geometry(f'{width}x{height}+{x}+{y}')
+            # Window configuration
+            self.title("Listen")
+            self.geometry("400x300")
+            self.resizable(False, False)
 
-        # Set appearance
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
+            # Center the window
+            self.update_idletasks()
+            width = self.winfo_width()
+            height = self.winfo_height()
+            x = (self.winfo_screenwidth() // 2) - (width // 2)
+            y = (self.winfo_screenheight() // 2) - (height // 2)
+            self.geometry(f'{width}x{height}+{x}+{y}')
 
-        # Recording state
-        self.is_recording = False
-        self.recording_thread = None
-        self.transcription_text = []
-        self.last_audio_time = None
-        self.silence_threshold = 15  # seconds
-        self.model = None
-        self.audio_interface = None
-        self.stream = None
+            # Set appearance
+            ctk.set_appearance_mode("dark")
+            ctk.set_default_color_theme("blue")
 
-        # Audio settings
-        self.CHUNK = 1024
-        self.FORMAT = pyaudio.paInt16
-        self.CHANNELS = 1
-        self.RATE = 16000
-        self.RECORD_SECONDS = 5
+            # Recording state
+            self.is_recording = False
+            self.recording_thread = None
+            self.transcription_text = []
+            self.last_audio_time = None
+            self.silence_threshold = 15  # seconds
+            self.model = None
+            self.audio_interface = None
+            self.stream = None
+            self.ready_to_record = False  # Track if initialization completed
 
-        # UI Components
-        self.create_widgets()
+            # Audio settings
+            self.CHUNK = 1024
+            self.FORMAT = pyaudio.paInt16
+            self.CHANNELS = 1
+            self.RATE = 16000
+            self.RECORD_SECONDS = 5
 
-        # Initialize model in background
-        self.status_label.configure(text="Loading model...")
-        self.update()
-        threading.Thread(target=self.initialize_model, daemon=True).start()
+            # UI Components
+            self.create_widgets()
+            logger.debug("GUI widgets created successfully")
+
+            # Set initial status - model initialization will be started by caller
+            self.status_label.configure(text="Loading model...")
+            self.update()
+        except Exception as e:
+            logger.error(f"Failed to initialize GUI: {e}", exc_info=True)
+            raise
 
     def create_widgets(self):
         # Main frame
@@ -105,36 +119,49 @@ class ListenApp(ctk.CTk):
         )
         self.transcription_label.pack(pady=5)
 
+    def _initialize_model_wrapper(self):
+        """Wrapper to catch any uncaught exceptions during model initialization"""
+        try:
+            self.initialize_model()
+        except Exception as e:
+            logger.error(f"Uncaught exception in model initialization thread: {e}", exc_info=True)
+            self.after(0, lambda: self.show_error(f"Critical initialization error: {e}"))
+
     def initialize_model(self):
         """Initialize the Whisper model"""
         try:
-            # Model configuration
-            cuda = False
-            model_size = "base"
-            device = "cpu"
-            compute_type = "int8"
+            # Model configuration from stored settings
+            device = "cuda" if self.cuda else "cpu"
+            compute_type = "float16" if self.cuda else "int8"
 
-            if cuda:
-                device = "cuda"
-                compute_type = "float16"
-
-            self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
+            logger.debug(f"Initializing Whisper model: size={self.model_size}, device={device}, compute_type={compute_type}")
+            self.model = WhisperModel(self.model_size, device=device, compute_type=compute_type)
+            logger.info("Whisper model loaded successfully")
 
             # Initialize audio interface
+            logger.debug("Initializing PyAudio interface")
             self.audio_interface = pyaudio.PyAudio()
+            logger.info("PyAudio interface initialized successfully")
 
             self.after(0, self.model_loaded)
         except Exception as e:
+            logger.error(f"Model initialization failed: {e}", exc_info=True)
             self.after(0, lambda: self.show_error(f"Model initialization failed: {e}"))
 
     def model_loaded(self):
         """Called when model is successfully loaded"""
         self.status_label.configure(text="Ready to record")
         self.record_button.configure(state="normal")
+        self.ready_to_record = True
+        logger.info("Application ready - user can now record")
 
     def show_error(self, message):
-        """Display error message"""
+        """Display error message and schedule window close"""
+        logger.error(f"Displaying error to user: {message}")
         self.status_label.configure(text=f"Error: {message}")
+        # Close window after 5 seconds to allow user to read error
+        logger.warning("GUI will close in 5 seconds due to initialization error")
+        self.after(5000, self.quit)
 
     def toggle_recording(self):
         """Toggle recording on/off"""
@@ -145,11 +172,12 @@ class ListenApp(ctk.CTk):
 
     def start_recording(self):
         """Start audio recording and transcription"""
+        logger.info("Starting audio recording")
         self.is_recording = True
         self.transcription_text = []
         self.last_audio_time = time.time()
 
-        self.record_button.configure(text="⏹ Stop")
+        self.record_button.configure(text="Stop")
         self.status_label.configure(text="Recording...")
         self.transcription_label.configure(text="")
 
@@ -175,6 +203,7 @@ class ListenApp(ctk.CTk):
         """Main recording and transcription loop"""
         try:
             # Open audio stream
+            logger.debug(f"Opening audio stream: format={self.FORMAT}, channels={self.CHANNELS}, rate={self.RATE}")
             self.stream = self.audio_interface.open(
                 format=self.FORMAT,
                 channels=self.CHANNELS,
@@ -184,6 +213,7 @@ class ListenApp(ctk.CTk):
                 input_device_index=None,
                 start=True
             )
+            logger.info("Audio stream opened successfully")
 
             while self.is_recording:
                 frames = []
@@ -196,6 +226,7 @@ class ListenApp(ctk.CTk):
                         data = self.stream.read(self.CHUNK, exception_on_overflow=False)
                         frames.append(np.frombuffer(data, dtype=np.int16))
                     except IOError as e:
+                        logger.warning(f"Audio read error: {e}")
                         print(f"Audio read error: {e}", file=sys.stderr)
                         time.sleep(0.1)
                         continue
@@ -222,9 +253,11 @@ class ListenApp(ctk.CTk):
                             self.update_transcription_display()
                             self.last_audio_time = time.time()
                 except Exception as e:
+                    logger.error(f"Transcription error: {e}", exc_info=True)
                     print(f"Transcription error: {e}", file=sys.stderr)
 
         except Exception as e:
+            logger.error(f"Recording error: {e}", exc_info=True)
             print(f"Recording error: {e}", file=sys.stderr)
             self.after(0, lambda: self.show_error(f"Recording failed: {e}"))
         finally:
@@ -257,6 +290,11 @@ class ListenApp(ctk.CTk):
 
     def on_closing(self):
         """Handle window closing"""
+        # Check if window closed before initialization completed
+        if not self.ready_to_record:
+            logger.error("GUI closed before initialization completed - user was unable to click Record button")
+            logger.error("This indicates a critical startup failure")
+
         self.is_recording = False
 
         try:
@@ -265,17 +303,19 @@ class ListenApp(ctk.CTk):
                     if self.stream.is_active():
                         self.stream.stop_stream()
                     self.stream.close()
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error closing audio stream: {e}")
 
             if self.audio_interface:
                 try:
                     self.audio_interface.terminate()
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error terminating audio interface: {e}")
         finally:
             # Output final transcription to stdout
             final_text = " ".join(self.transcription_text)
+            if final_text:
+                logger.debug(f"Outputting transcription on close: {len(final_text)} chars")
             print(final_text)
             sys.stdout.flush()
 
@@ -296,6 +336,7 @@ class ListenApp(ctk.CTk):
               help='Use CUDA GPU acceleration (requires NVIDIA GPU)')
 @click.version_option(version='0.1.0', prog_name='listen')
 def main(model_size, silence_threshold, cuda):
+    logger.info(f"Starting listen application: model_size={model_size}, silence_threshold={silence_threshold}, cuda={cuda}")
     """
     Audio transcription tool with real-time GUI display.
 
@@ -353,37 +394,35 @@ def main(model_size, silence_threshold, cuda):
         - Use 'tiny' for fastest processing (less accurate)
     """
     # Create and configure app with command-line options
-    app = ListenApp()
+    try:
+        app = ListenApp(model_size=model_size, cuda=cuda)
+    except Exception as e:
+        logger.error(f"Failed to create GUI application: {e}", exc_info=True)
+        logger.error("Application cannot start - GUI initialization failed")
+        sys.exit(1)
 
     # Apply command-line options
     app.silence_threshold = silence_threshold
 
-    # Update model initialization to use provided options
-    # This requires modifying the ListenApp to accept these parameters
-    # For now, we'll update the app after initialization
-    original_init = app.initialize_model
-
-    def custom_init():
-        """Initialize with custom model settings"""
-        try:
-            device = "cuda" if cuda else "cpu"
-            compute_type = "float16" if cuda else "int8"
-
-            app.model = WhisperModel(model_size, device=device, compute_type=compute_type)
-            app.audio_interface = pyaudio.PyAudio()
-            app.after(0, app.model_loaded)
-        except Exception as e:
-            app.after(0, lambda: app.show_error(f"Model initialization failed: {e}"))
-
-    # Replace the initialization method
-    threading.Thread(target=custom_init, daemon=True).start()
+    # Start model initialization in background thread
+    init_thread = threading.Thread(target=app._initialize_model_wrapper, daemon=True)
+    init_thread.start()
 
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
 
     try:
+        logger.debug("Starting GUI main loop")
         app.mainloop()
+        logger.debug("GUI main loop ended")
+    except KeyboardInterrupt:
+        logger.info("Application interrupted by user (Ctrl+C)")
+    except Exception as e:
+        logger.error(f"Unexpected error during GUI execution: {e}", exc_info=True)
+        logger.error("Application terminated due to error")
     finally:
         final_text = " ".join(app.transcription_text)
+        if final_text:
+            logger.debug(f"Outputting final transcription ({len(final_text)} chars)")
         print(final_text)
         sys.stdout.flush()
 
