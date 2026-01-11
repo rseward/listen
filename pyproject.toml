@@ -19,6 +19,7 @@ dependencies = [
 listen = "listen_tools.listen_app:main"
 improve = "listen_tools.improve:main"
 list-models = "listen_tools.list_models:main"
+list-audio-devices = "listen_tools.list_audio_devices:main"
 
 [tool.pytest.ini_options]
 markers = [

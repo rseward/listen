@@ -7,6 +7,7 @@ and a rotating file in the logs/ directory.
 
 import logging
 import os
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from dotenv import load_dotenv
@@ -69,11 +70,14 @@ def setup_logger(name: str, log_file: str = None) -> logging.Logger:
     
     log_path = log_dir / log_file
     
-    # Create formatters
+    # Create formatters with local time
     file_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+    # Configure formatter to use local time instead of UTC
+    file_formatter.converter = time.localtime
+    
     console_formatter = logging.Formatter(
         '%(levelname)s - %(message)s'
     )

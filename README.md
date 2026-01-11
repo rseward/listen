@@ -45,10 +45,11 @@ make install
 uv pip install -e .
 ```
 
-Both methods will install three commands:
+Both methods will install four commands:
 - `listen` - The GUI transcription application
 - `improve` - Text improvement CLI tool
 - `list-models` - List available AI models from configured providers
+- `list-audio-devices` - List available audio devices with their properties
 
 ## Usage
 
@@ -108,6 +109,36 @@ uv run list-models --any-llm-only
 uv run list-models --format json
 ```
 
+### List Audio Devices (Discovery)
+
+List available audio devices to find the correct device index for configuration:
+
+```bash
+# List all input/output devices in table format
+list-audio-devices
+
+# Show detailed information
+list-audio-devices --format detailed
+
+# Show only input devices (for recording)
+list-audio-devices --input-only
+
+# Show only output devices (for playback)
+list-audio-devices --output-only
+
+# Show all devices including those with no input/output
+list-audio-devices --all
+```
+
+The table format displays:
+- **IDX**: Device index (use this for `AUDIO_DEVICE_INDEX` in `.env`)
+- **NAME**: Device name
+- **RATE**: Default sample rate in Hz
+- **IN**: Maximum input channels (0 = no input)
+- **OUT**: Maximum output channels (0 = no output)
+- **HOST API**: Audio host API (ALSA, JACK, etc.)
+- **DEFAULT**: System default device markers (IN/OUT)
+
 ### Configuration
 
 Copy `.env.example` to `.env` and configure as needed:
@@ -131,6 +162,36 @@ Logs are written to separate files in the `logs/` directory:
 - `logs/text_improver.log` - AI backend logs
 
 See [logs/README.md](logs/README.md) for detailed logging documentation.
+
+#### Audio Configuration
+
+Configure audio device and sample rate in your `.env` file:
+
+```bash
+# Audio device index (optional, defaults to system default)
+# List available devices with: list-audio-devices
+AUDIO_DEVICE_INDEX=4
+
+# Sample rate in Hz (optional, defaults to auto-detection)
+# Common values: 16000, 44100, 48000
+# Note: 16000 Hz is optimal for Whisper transcription
+AUDIO_SAMPLE_RATE=44100
+```
+
+**To find your device index:**
+```bash
+list-audio-devices
+```
+
+**Auto-detection behavior:**
+- If not configured, the app automatically detects your default audio device
+- Sample rates are tested in order: 16000, device default, 44100, 48000, 22050, 8000 Hz
+- The first working rate is selected
+
+**Manual configuration:**
+- Use `AUDIO_DEVICE_INDEX` to force a specific microphone/input device
+- Use `AUDIO_SAMPLE_RATE` to force a specific sample rate
+- Invalid values fall back to auto-detection with a warning
 
 #### Gemini API (Recommended)
 
@@ -223,7 +284,41 @@ tail -50 logs/listen_app.log | grep ERROR
 # Enable debug logging
 export LOG_LEVEL=DEBUG
 listen
+
+# Enable debug mode (saves audio chunks to WAV files)
+listen --debug
 ```
+
+### Debug Mode
+
+If transcription isn't working, enable debug mode to save recorded audio chunks to WAV files:
+
+```bash
+listen --debug
+```
+
+Audio files will be saved to `debug_audio/audio_TIMESTAMP.wav`. The file path is printed to stderr after each chunk is saved. You can inspect these files to verify:
+- Audio is being captured correctly
+- Microphone input is working
+- Audio quality is sufficient for transcription
+
+### Audio Device Issues
+
+The application automatically detects your audio device and selects an optimal sample rate. If you experience issues:
+
+1. Check available audio devices:
+```bash
+python3 -c "import pyaudio; pa = pyaudio.PyAudio(); [print(f'{i}: {pa.get_device_info_by_index(i)[\"name\"]}') for i in range(pa.get_device_count())]; pa.terminate()"
+```
+
+2. Test your microphone:
+```bash
+# Record a test with debug mode
+listen --debug
+# Check the saved WAV files in debug_audio/
+```
+
+**Note for Fedora/PipeWire users**: If you're using Homebrew Python on Fedora with PipeWire, the system will automatically select a compatible audio device and sample rate.
 
 ## Technical Details
 
