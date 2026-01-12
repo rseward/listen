@@ -59,9 +59,9 @@ class TextImprover(object):
         self.model = None
         self.base_url = None
         self.prompt = prompt
-        
+
         if gemini_available():
-            self.model = "gemini:gemini-2.0-flash-exp"
+            self.model = "gemini:gemini-2.5-flash"
             logger.info(f"Using Gemini model: {self.model}")
         elif ollama_available():
             self.model = "ollama:gemma3:latest"
@@ -84,7 +84,7 @@ class TextImprover(object):
             return text
 
         logger.debug(f"Improving text with model {self.model} (text length: {len(text)} chars)")
-        
+
         messages = [
             {"role": "system", "content": self.prompt},
             {"role": "user", "content": text}
