@@ -19,9 +19,12 @@ import threading
 from faster_whisper import WhisperModel
 import sys
 import click
+import json
 import wave
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
+from tkinter import font as tkfont
 from .logger import setup_logger
 import subprocess
 
@@ -30,6 +33,16 @@ load_dotenv()
 
 # Set up logger
 logger = setup_logger(__name__)
+
+# UI constants
+READY_TEXT = "Ready to record. Press Space to Record."
+BASE_FONT_SIZE = 12
+MIN_FONT_SIZE = 8
+MAX_FONT_SIZE = 28
+# First installed candidate wins; Arial is the final fallback.
+FONT_CANDIDATES = ("JetBrains Mono", "Consolas", "DejaVu Sans Mono", "Arial")
+CONFIG_DIR = Path.home() / ".config" / "com.bluestone.listen"
+PREF_FILE = CONFIG_DIR / "preferences.json"
 
 
 class ListenApp(ctk.CTk):
@@ -72,6 +85,7 @@ class ListenApp(ctk.CTk):
             self.stream_lock = threading.Lock()  # Protect stream cleanup
             self.cleanup_done = False  # Prevent double cleanup
             self.ready_to_record = False  # Track if initialization completed
+            self.is_busy = False  # True during Processing/Improve; blocks Space toggle
 
             # Audio settings
             self.CHUNK = 1024
@@ -81,6 +95,10 @@ class ListenApp(ctk.CTk):
             self.RECORD_SECONDS = 5
             self.device_index = None  # Will be set during initialization
             self.sample_width = None  # Cache sample width for debug mode
+
+            # Font / display preferences (resolved before widgets are built)
+            self.font_family = self._resolve_font()
+            self.font_size = self._load_pref()
 
             # UI Components
             self.create_widgets()
@@ -152,6 +170,16 @@ class ListenApp(ctk.CTk):
             state="disabled",
         )
         self.finish_button.pack(side="left", padx=5)
+
+        # Apply resolved font size to all widgets (also sizes the window)
+        self.apply_font_size()
+
+        # Global keybindings (window-level; ignored when the textbox has focus)
+        self.bind("<space>", self._on_space)
+        self.bind("<Control-plus>", self._zoom_in)
+        self.bind("<Control-equal>", self._zoom_in)
+        self.bind("<Control-minus>", self._zoom_out)
+        self.bind("<Control-0>", self._zoom_reset)
 
     def _initialize_model_wrapper(self):
         """Wrapper to catch any uncaught exceptions during model initialization"""
@@ -290,7 +318,7 @@ class ListenApp(ctk.CTk):
 
     def model_loaded(self):
         """Called when model is successfully loaded"""
-        self.status_label.configure(text="Ready to record")
+        self.status_label.configure(text=READY_TEXT)
         self.record_button.configure(state="normal")
         self.improve_button.configure(state="normal")
         self.finish_button.configure(state="normal")
@@ -348,6 +376,7 @@ class ListenApp(ctk.CTk):
 
     def stop_recording(self):
         """Stop audio recording"""
+        self.is_busy = True  # Block Space toggle while the chunk finishes
         self.is_recording = False
         self.status_label.configure(text="Processing...")
 
@@ -356,7 +385,8 @@ class ListenApp(ctk.CTk):
 
         # Update status to ready after stopping
         self.record_button.configure(text="Record")
-        self.status_label.configure(text="Ready to record")
+        self.status_label.configure(text=READY_TEXT)
+        self.is_busy = False
 
     def record_and_transcribe(self):
         """Main recording and transcription loop"""
@@ -506,9 +536,11 @@ class ListenApp(ctk.CTk):
             if not current_text:
                 logger.warning("No text to improve")
                 self.status_label.configure(text="No text to improve")
-                self.after(2000, lambda: self.status_label.configure(text="Ready to record"))
+                self.after(2000, self._reset_ready)
                 return
 
+            # Block Space toggle while the improve subprocess runs
+            self.is_busy = True
             # Update status
             self.status_label.configure(text="Improving text...")
             logger.info(f"Improving text (length: {len(current_text)} chars)")
@@ -534,23 +566,23 @@ class ListenApp(ctk.CTk):
                             self.transcription_textbox.delete("1.0", "end")
                             self.transcription_textbox.insert("1.0", improved_text)
                             self.status_label.configure(text="Text improved")
-                            self.after(2000, lambda: self.status_label.configure(text="Ready to record"))
+                            self.after(2000, self._reset_ready)
 
                         self.after(0, update_ui)
                     else:
                         error_msg = result.stderr.strip() if result.stderr else "Unknown error"
                         logger.error(f"Improve command failed: {error_msg}")
                         self.after(0, lambda: self.status_label.configure(text="Improve failed"))
-                        self.after(0, lambda: self.after(2000, lambda: self.status_label.configure(text="Ready to record")))
+                        self.after(0, lambda: self.after(2000, self._reset_ready))
 
                 except subprocess.TimeoutExpired:
                     logger.error("Improve command timed out")
                     self.after(0, lambda: self.status_label.configure(text="Improve timed out"))
-                    self.after(0, lambda: self.after(2000, lambda: self.status_label.configure(text="Ready to record")))
+                    self.after(0, lambda: self.after(2000, self._reset_ready))
                 except Exception as e:
                     logger.error(f"Error running improve command: {e}", exc_info=True)
                     self.after(0, lambda: self.status_label.configure(text="Improve error"))
-                    self.after(0, lambda: self.after(2000, lambda: self.status_label.configure(text="Ready to record")))
+                    self.after(0, lambda: self.after(2000, self._reset_ready))
 
             improve_thread = threading.Thread(target=run_improve, daemon=True)
             improve_thread.start()
@@ -558,7 +590,7 @@ class ListenApp(ctk.CTk):
         except Exception as e:
             logger.error(f"Failed to improve text: {e}", exc_info=True)
             self.status_label.configure(text="Improve failed")
-            self.after(2000, lambda: self.status_label.configure(text="Ready to record"))
+            self.after(2000, self._reset_ready)
 
     def finish_and_close(self):
         """Print the text from the textbox to stdout and close the UI"""
@@ -577,6 +609,85 @@ class ListenApp(ctk.CTk):
             logger.error(f"Failed to finish: {e}", exc_info=True)
             # Still try to close
             self.on_closing()
+
+    def _reset_ready(self):
+        """Restore the ready status and re-enable Space toggle after a busy state."""
+        self.status_label.configure(text=READY_TEXT)
+        self.is_busy = False
+
+    def _resolve_font(self):
+        """Pick the first installed font from FONT_CANDIDATES, else Arial."""
+        try:
+            available = set(tkfont.families())
+        except Exception:
+            available = set()
+        for candidate in FONT_CANDIDATES:
+            if candidate in available:
+                return candidate
+        return "Arial"
+
+    def _load_pref(self):
+        """Load persisted font size, clamped to the allowed range."""
+        try:
+            data = json.loads(PREF_FILE.read_text())
+            size = int(data.get("font_size", BASE_FONT_SIZE))
+            if MIN_FONT_SIZE <= size <= MAX_FONT_SIZE:
+                return size
+        except Exception:
+            pass
+        return BASE_FONT_SIZE
+
+    def _save_pref(self):
+        """Persist the current font size to the user config directory."""
+        try:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            PREF_FILE.write_text(json.dumps({"font_size": self.font_size}))
+        except Exception as e:
+            logger.warning(f"Could not save preferences: {e}")
+
+    def _set_geometry(self, w, h):
+        """Size and re-center the window."""
+        self.update_idletasks()
+        x = (self.winfo_screenwidth() // 2) - (w // 2)
+        y = (self.winfo_screenheight() // 2) - (h // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+    def apply_font_size(self):
+        """Re-apply the current font size to every widget and resize the window."""
+        ratio = self.font_size / BASE_FONT_SIZE
+        f = self.font_family
+        self.status_label.configure(font=(f, max(MIN_FONT_SIZE, int(14 * ratio))))
+        self.transcription_textbox.configure(
+            font=(f, self.font_size),
+            width=int(560 * ratio),
+            height=int(300 * ratio),
+        )
+        btn_font = (f, max(MIN_FONT_SIZE, int(14 * ratio)), "bold")
+        btn_w, btn_h = int(150 * ratio), int(50 * ratio)
+        for btn in (self.record_button, self.improve_button, self.finish_button):
+            btn.configure(font=btn_font, width=btn_w, height=btn_h)
+        self._set_geometry(int(600 * ratio), int(500 * ratio))
+        self._save_pref()
+
+    def _on_space(self, event=None):
+        """Space toggles recording, unless the user is editing or the app is busy."""
+        if self.focus_get() is self.transcription_textbox:
+            return  # let the user type spaces into the transcription
+        if not self.ready_to_record or self.is_busy:
+            return  # loading, processing, or improving — ignore
+        self.toggle_recording()
+
+    def _zoom_in(self, event=None):
+        self.font_size = min(MAX_FONT_SIZE, self.font_size + 1)
+        self.apply_font_size()
+
+    def _zoom_out(self, event=None):
+        self.font_size = max(MIN_FONT_SIZE, self.font_size - 1)
+        self.apply_font_size()
+
+    def _zoom_reset(self, event=None):
+        self.font_size = BASE_FONT_SIZE
+        self.apply_font_size()
 
     def on_closing(self):
         """Handle window closing"""
@@ -687,6 +798,16 @@ def main(model_size, silence_threshold, cuda, debug):
         - Automatic silence detection
         - Clean GUI interface
         - Stdout output for easy piping
+
+    Keybindings:
+
+        \b
+        - Space          Toggle recording (start/stop). Ignored while the
+                        transcription textbox has focus or the app is busy
+                        (loading, processing, or improving text).
+        - Ctrl-+ / Ctrl-=  Increase font size.
+        - Ctrl--         Decrease font size.
+        - Ctrl-0         Reset font size to the default.
 
     Usage Examples:
 
