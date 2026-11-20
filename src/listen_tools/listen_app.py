@@ -182,6 +182,8 @@ class ListenApp(ctk.CTk):
         self.bind("<Control-KP_Add>", self._zoom_in)
         self.bind("<Control-KP_Subtract>", self._zoom_out)
         self.bind("<Control-0>", self._zoom_reset)
+        self.bind("<Control-space>", self._on_ctrl_space)
+        self.bind("<Control-Return>", self._on_ctrl_enter)
 
     def _initialize_model_wrapper(self):
         """Wrapper to catch any uncaught exceptions during model initialization"""
@@ -686,6 +688,16 @@ class ListenApp(ctk.CTk):
             return  # loading, processing, or improving — ignore
         self.toggle_recording()
 
+    def _on_ctrl_space(self, event=None):
+        """Ctrl-Space runs Improve, same as clicking the Improve button."""
+        if not self.ready_to_record or self.is_busy:
+            return
+        self.improve_text()
+
+    def _on_ctrl_enter(self, event=None):
+        """Ctrl-Enter finishes the run, same as clicking the Finish button."""
+        self.finish_and_close()
+
     def _zoom_in(self, event=None):
         self.font_size = min(MAX_FONT_SIZE, self.font_size + 1)
         self.apply_font_size()
@@ -817,6 +829,8 @@ def main(model_size, silence_threshold, cuda, debug):
         - Ctrl-+ / Ctrl-=  Increase font size (numeric keypad + works too).
         - Ctrl--         Decrease font size (numeric keypad - works too).
         - Ctrl-0         Reset font size to the default.
+        - Ctrl-Space     Improve the transcribed text (same as Improve button).
+        - Ctrl-Enter     Finish and close (same as Finish button).
 
     Usage Examples:
 
