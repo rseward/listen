@@ -671,7 +671,10 @@ class ListenApp(ctk.CTk):
 
     def _on_space(self, event=None):
         """Space toggles recording, unless the user is editing or the app is busy."""
-        if self.focus_get() is self.transcription_textbox:
+        # CTkTextbox is a wrapper; focus lands on its inner tkinter.Text widget.
+        focused = self.focus_get()
+        inner = getattr(self.transcription_textbox, "_textbox", None)
+        if focused is self.transcription_textbox or focused is inner:
             return  # let the user type spaces into the transcription
         if not self.ready_to_record or self.is_busy:
             return  # loading, processing, or improving — ignore
