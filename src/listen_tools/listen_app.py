@@ -179,6 +179,8 @@ class ListenApp(ctk.CTk):
         self.bind("<Control-plus>", self._zoom_in)
         self.bind("<Control-equal>", self._zoom_in)
         self.bind("<Control-minus>", self._zoom_out)
+        self.bind("<Control-KP_Add>", self._zoom_in)
+        self.bind("<Control-KP_Subtract>", self._zoom_out)
         self.bind("<Control-0>", self._zoom_reset)
 
     def _initialize_model_wrapper(self):
@@ -653,16 +655,20 @@ class ListenApp(ctk.CTk):
         self.geometry(f"{w}x{h}+{x}+{y}")
 
     def apply_font_size(self):
-        """Re-apply the current font size to every widget and resize the window."""
+        """Re-apply the current font size to every widget and resize the window.
+
+        The transcription textbox uses the monospace family; UI chrome (status
+        label and buttons) uses Arial.
+        """
         ratio = self.font_size / BASE_FONT_SIZE
-        f = self.font_family
-        self.status_label.configure(font=(f, max(MIN_FONT_SIZE, int(14 * ratio))))
+        ui_family = "Arial"
+        self.status_label.configure(font=(ui_family, max(MIN_FONT_SIZE, int(14 * ratio))))
         self.transcription_textbox.configure(
-            font=(f, self.font_size),
+            font=(self.font_family, self.font_size),
             width=int(560 * ratio),
             height=int(300 * ratio),
         )
-        btn_font = (f, max(MIN_FONT_SIZE, int(14 * ratio)), "bold")
+        btn_font = (ui_family, max(MIN_FONT_SIZE, int(14 * ratio)), "bold")
         btn_w, btn_h = int(150 * ratio), int(50 * ratio)
         for btn in (self.record_button, self.improve_button, self.finish_button):
             btn.configure(font=btn_font, width=btn_w, height=btn_h)
@@ -808,8 +814,8 @@ def main(model_size, silence_threshold, cuda, debug):
         - Space          Toggle recording (start/stop). Ignored while the
                         transcription textbox has focus or the app is busy
                         (loading, processing, or improving text).
-        - Ctrl-+ / Ctrl-=  Increase font size.
-        - Ctrl--         Decrease font size.
+        - Ctrl-+ / Ctrl-=  Increase font size (numeric keypad + works too).
+        - Ctrl--         Decrease font size (numeric keypad - works too).
         - Ctrl-0         Reset font size to the default.
 
     Usage Examples:
