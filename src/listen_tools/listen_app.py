@@ -182,8 +182,8 @@ class ListenApp(ctk.CTk):
         self.bind("<Control-KP_Add>", self._zoom_in)
         self.bind("<Control-KP_Subtract>", self._zoom_out)
         self.bind("<Control-0>", self._zoom_reset)
-        self.bind("<Control-space>", self._on_ctrl_space)
-        self.bind("<Control-Return>", self._on_ctrl_enter)
+        self.bind_all("<Control-space>", self._on_ctrl_space)
+        self.bind_all("<Control-Return>", self._on_ctrl_enter)
 
     def _initialize_model_wrapper(self):
         """Wrapper to catch any uncaught exceptions during model initialization"""
@@ -545,8 +545,10 @@ class ListenApp(ctk.CTk):
 
             # Block Space toggle while the improve subprocess runs
             self.is_busy = True
-            # Update status
+            # Update status and force a repaint so the label shows before the
+            # LLM subprocess starts (it runs in a background thread).
             self.status_label.configure(text="Improving text...")
+            self.update_idletasks()
             logger.info(f"Improving text (length: {len(current_text)} chars)")
 
             # Run improve command in a separate thread
