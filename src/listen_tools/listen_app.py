@@ -182,8 +182,10 @@ class ListenApp(ctk.CTk):
         self.bind("<Control-KP_Add>", self._zoom_in)
         self.bind("<Control-KP_Subtract>", self._zoom_out)
         self.bind("<Control-0>", self._zoom_reset)
-        self.bind_all("<Control-space>", self._on_ctrl_space)
-        self.bind_all("<Control-Return>", self._on_ctrl_enter)
+        self.bind_all("<Control-Return>", self._on_finish_shortcut)
+        self.bind_all("<Alt-Return>", self._on_finish_shortcut)
+        self.bind("<Control-BackSpace>", self._on_improve_shortcut)
+        self.bind("<Alt-BackSpace>", self._on_improve_shortcut)
 
     def _initialize_model_wrapper(self):
         """Wrapper to catch any uncaught exceptions during model initialization"""
@@ -690,15 +692,17 @@ class ListenApp(ctk.CTk):
             return  # loading, processing, or improving — ignore
         self.toggle_recording()
 
-    def _on_ctrl_space(self, event=None):
-        """Ctrl-Space runs Improve, same as clicking the Improve button."""
+    def _on_improve_shortcut(self, event=None):
+        """Ctrl/Alt-BackSpace runs Improve, same as clicking the Improve button."""
         if not self.ready_to_record or self.is_busy:
-            return
+            return "break"
         self.improve_text()
+        return "break"  # stop the textbox from deleting a character
 
-    def _on_ctrl_enter(self, event=None):
-        """Ctrl-Enter finishes the run, same as clicking the Finish button."""
+    def _on_finish_shortcut(self, event=None):
+        """Ctrl/Alt-Enter finishes the run, same as clicking the Finish button."""
         self.finish_and_close()
+        return "break"
 
     def _zoom_in(self, event=None):
         self.font_size = min(MAX_FONT_SIZE, self.font_size + 1)
@@ -831,8 +835,10 @@ def main(model_size, silence_threshold, cuda, debug):
         - Ctrl-+ / Ctrl-=  Increase font size (numeric keypad + works too).
         - Ctrl--         Decrease font size (numeric keypad - works too).
         - Ctrl-0         Reset font size to the default.
-        - Ctrl-Space     Improve the transcribed text (same as Improve button).
+        - Ctrl-Backspace  Improve the transcribed text (same as Improve button).
+                        Alt-Backspace also works.
         - Ctrl-Enter     Finish and close (same as Finish button).
+                        Alt-Enter also works.
 
     Usage Examples:
 
